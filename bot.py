@@ -27,8 +27,7 @@ class TradeDiscordBot:
         self.register_commands()
         
         # Read list of pokemon
-        self.pokemon_list = []
-        self.load_pokemon()
+        self.pokemon_num_nam, self.pokemon_nam_num = self.load_pokemon()
 
     async def on_ready(self):
         """Event handler for when the bot is ready."""
@@ -47,22 +46,45 @@ class TradeDiscordBot:
             # Restrict to "trades" channel
             if interaction.channel.name.lower() != "trades":
                 await interaction.response.send_message(
-                    "This command can only be used in the 'trades' channel.", ephemeral=True
+                    "This command can only be used in the 'trades' channel.",
+                    ephemeral=True
                 )
                 return
-            embed = discord.Embed(title="Bot Commands", description="List of available commands:", color=discord.Color.blue())
-            embed.add_field(name="/help", value="Shows this help message", inline=False)
-            embed.add_field(name="/trade", value="Opens a new trade thread under the #trades channel: may only be run in the #trades channel", inline=False)
-            embed.add_field(name="/close", value="Closes/ends an open trade request; may only be run in the trade thread by the trade requestor")
+            embed = discord.Embed(
+                title="Bot Commands",
+                description="List of available commands:",
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="/help",
+                value="Shows this help message",
+                inline=False
+            )
+            embed.add_field(
+                name="/trade",
+                value="Opens a new trade thread under the #trades channel: may only be run in the #trades channel",
+                inline=False
+            )
+            embed.add_field(
+                name="/close",
+                value="Closes/ends an open trade request; may only be run in the trade thread by the trade requestor"
+            )
             await interaction.response.send_message(embed=embed, ephemeral=True)
     
         # Command: /trade
-        @self.bot.tree.command(name="trade", description="Open/start a trade request")
+        @self.bot.tree.command(
+            name="trade",
+            description="Open/start a trade request"
+        )
         @discord.app_commands.describe(
             pokemon="Pokemon request",
             features="List of features, e.g.s, shiny, xxs, specific costume"
         )
-        async def trade_command(interaction: discord.Interaction, pokemon: str, features: str):
+        async def trade_command(
+            interaction: discord.Interaction,
+            pokemon: str,
+            features: str
+        ):
             # Restrict to "trades" channel
             if interaction.channel.name.lower() != "trades":
                 await interaction.response.send_message(
@@ -77,24 +99,45 @@ class TradeDiscordBot:
                     auto_archive_duration=1440,
                     type=discord.ChannelType.public_thread
                 )
-#                response = f"Looking for: {pokemon}\nspecial features: {pokeopt or 'None'}\nDiscussion in: {thread.mention}"
-#                embed = discord.Embed(
-#                    title=f"Trade Request from {interaction.user.name}",
-#                    description=response,
-#                    color=discord.Color.purple()
-#                )
-#                embed.add_field(name="Thread", value=f"", inline=False)
-                # Store the creator's ID in thread metadata or description for later verification
-#                await interaction.response.send_message(embed=embed)
-
-                # TODO: Code to check for valid Pokémon names
+                # Check for valid Pokémon names
+                if pokemon.lower() not in pokemon_nam_num.keys():
+                    response = f"The Pokémon you requested is either not part of the game or has been misspelled.\nPlease try again."
+                    embed = discord.Embed(
+                        title=f"Invalid Pokémon name: {pokemon}",
+                        description=response,
+                        color=discord.Color.red()
+                    )
+                    await interaction.response.send_message(
+                        embed=embed
+                        ephemeral=True
+                    )
+                    return
                 
-                thread_embed = discord.Embed(title="Trade Request Started", color=discord.Color.teal())
-                #thread_embed.set_thumbnail(url="")
-                thread_embed.add_field(name="Initiated By:",value=f"{interaction.user.mention}", inline=False)
-                thread_embed.add_field(name="Request", value=pokemon, inline=True)
-                thread_embed.add_field(name="Features", value=f'{features or "None"}', inline=True)
-                thread_embed.set_footer(text=f'Ref: {interaction.user.id}')
+                # TODO: Match number to name for thumbnail
+                
+                thread_embed = discord.Embed(
+                    title="Trade Request Started",
+                    color=discord.Color.teal()
+                )
+                thread_embed.set_thumbnail(
+                    url=f"https://www.pokemon.com/static-assets/content-assets/cms2/img/pokedex/full/{pokemon_nam_num[pokemon.lower()]}.png"
+                )
+                thread_embed.add_field(
+                    name="Initiated By:",
+                    value=f"{interaction.user.mention}", inline=False
+                )
+                thread_embed.add_field(
+                    name="Request", value=pokemon,
+                    inline=True
+                )
+                thread_embed.add_field(
+                    name="Features",
+                    value=f'{features or "None"}',
+                    inline=True
+                )
+                thread_embed.set_footer(
+                    text=f'Ref: {interaction.user.id}'
+                )
                 await thread.send(embed=thread_embed)
                 
                 # Message to requestor to post message in the thread
@@ -102,8 +145,14 @@ class TradeDiscordBot:
                     title="Please Post Message In Thread",
                     color=discord.Color.red()
                 )
-                embed.add_field(name="Is your request is visible?", value=f"Post a message in the {thread.mention} thread to be sure to be seen!")
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                embed.add_field(
+                    name="Is your request is visible?",
+                    value=f"Post a message in the {thread.mention} thread to be sure to be seen!"
+                )
+                await interaction.response.send_message(
+                    embed=embed,
+                    ephemeral=True
+                )
             except discord.errors.Forbidden:
                 await interaction.response.send_message(
                     "Error: Bot doesn't have permission to create threads",
@@ -116,26 +165,17 @@ class TradeDiscordBot:
                 )
     
         # Command: /close
-        @self.bot.tree.command(name="close", description="Close/End a Trade Request. Must be done by originator of the trade.")
+        @self.bot.tree.command(
+            name="close",
+            description="Close/End a Trade Request. Must be done by originator of the trade."
+        )
         async def close_command(interaction: discord.Interaction):
             # Restrict to threads
             if not isinstance(interaction.channel, discord.Thread):
                 await interaction.response.send_message("This command must be used in a trade thread", ephemeral=True)
                 return
             # Check if the user is the thread creator
-            # Note: interaction.channel.owner may not always be reliable, so we parse the initial thread message
-#            try:
-#                async for counter, message in enumerate(interaction.channel.history(oldest_first=True)):
-#                    print(f'MESSAGE {counter}: {message}')
-#            except Exception as e:
-#                await interaction.response.send_message("there is likely no history")
-#            try:
-#                async for message in interaction.channel.history(limit=1, oldest_first=True):
-#                    if str(interaction.user.id) not in message.content:
-#                        await interaction.response.send_message(
-#                            f"Only the original trade requestor can close this thread.\nuser.id = {interaction.user.id}\nmessage.content = {message.content}", ephemeral=True
-#                        )
-#                        return
+            # (basic check using channel name; not going for rocket science here)
             if interaction.user.name not in interaction.channel.name:
             	embed = discord.Embed(
                     title="Not Permitted",
@@ -166,7 +206,10 @@ class TradeDiscordBot:
                 )
                 
         # Command: /reload_pokemon_list
-        @self.bot.tree.command(name="reload_pokemon_list", description="Force a reload of Pokémon names.")
+        @self.bot.tree.command(
+            name="reload_pokemon_list",
+            description="Force a reload of Pokémon names."
+        )
         async def reload_pokemon_list_command(interaction: discord.Interaction):
             # Restrict to Admin users
             if not interaction.user.guild_permissions.administrator:
@@ -183,7 +226,7 @@ class TradeDiscordBot:
                 return
             # Perform the load
             try:
-                self.load_pokemon()
+                self.pokemon_num_nam, self.pokemon_nam_num = self.load_pokemon()
                 await interaction.response.send_message(
                     f"Loaded {len(self.pokemon_list)} entries", 
                     ephemeral=True
@@ -198,15 +241,30 @@ class TradeDiscordBot:
         """
         Perform the read and load of the pokemon list file
         """
-        file_name = 'pokemon.list'
+        filename = 'pokemon.list'
+        # Dict to store number:name pairs
+        number_to_name = {}
+        # Dict to store name:number pairs
+        name_to_number = {}
         try:
-            with open(file_name, 'r', encoding='utf-8') as file:
-                self.pokemon_list = [ line.strip() for line in file ]
-                print(f"Loaded {len(self.pokemon_list)} from '{file_name}'.")
+            with open(filename, 'r', encoding='utf-8') as file:
+                for line in file:
+                	# Strip whitespace and split by comma
+                	number, name = line.strip().split(',')
+                	# Keep number as str to preserve leading zeros
+                	number = number.strip()
+                	name = name.strip().lower()
+                	# Store in both dicts
+                	number_to_name[number] = name
+                	name_to_number[name] = number
+            print(f"Loaded {len(self.number_to_name)} from '{filename}'.")
+            return number_to_name, name_to_number
         except FileNotFoundError:
-            print(f"Error: File '{file_name}'' not found.")
+            print(f"Error: File '{filename}'' not found.")
+            return None, None
         except IOError:
-            print(f"Error: Unable to read file '{file_name}'.")
+            print(f"Error: Unable to read file '{filename}'.")
+            return None, None
               
     def add_new_command(self, name, description, callback):
         """
@@ -239,4 +297,5 @@ if __name__ == "__main__":
 """
     To get the list of pokemon for the pokemon.list file, use this site:
     https://pokemondb.net/tools/text-list
+    Get "number,name" format, and remove the first line (Number,Name)
 """
